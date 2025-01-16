@@ -3,7 +3,7 @@
 This app collects IMU data and 3D point cloud data in IOS devices
 ## Related projects
 
-- [StrayVisualizer](https://github.com/kekeblom/StrayVisualizer): a project to 
+- [StrayVisualizer](https://github.com/kekeblom/StrayVisualizer): a project to visualize the raw data collected by the app
 
 ## Contributing
 
