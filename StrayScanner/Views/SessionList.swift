@@ -78,6 +78,15 @@ struct SessionList: View {
                         InformationView()
                     }
                 }
+                
+                // Add a Text view for the total recording count
+                if !viewModel.sessions.isEmpty {
+                    Text("Total Recordings: \(viewModel.sessions.count)")
+                        .foregroundColor(Color("TextColor"))
+                        .font(.body)
+                        .fontWeight(.medium)
+                        .padding([.leading, .top], 15.0)
+                }
 
                 if !viewModel.sessions.isEmpty {
                     List {
