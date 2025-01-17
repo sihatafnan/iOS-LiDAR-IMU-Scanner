@@ -68,7 +68,7 @@ class RecordSessionViewController : UIViewController, ARSessionDelegate {
     
     var audioPlayer: AVAudioPlayer?
     var attack: Bool = true
-    var loadSignals: Bool = true
+    var loadSignals: Bool = false
     
 
     
@@ -149,7 +149,8 @@ class RecordSessionViewController : UIViewController, ARSessionDelegate {
             self.updateTime()
         }
         datasetEncoder = DatasetEncoder(arConfiguration: arConfiguration!, fpsDivider: FpsDividers[chosenFpsSetting], dirName: directoryName)
-        startAccelerometer()
+//        startAccelerometer()
+        startRawIMU()
 
         // Stop recording after 3 seconds
         Timer.scheduledTimer(withTimeInterval: 3.0, repeats: false) { _ in
@@ -189,22 +190,67 @@ class RecordSessionViewController : UIViewController, ARSessionDelegate {
         }
     }
     
-    private func startAccelerometer() {
+//    private func startAccelerometer() {
+//        if self.motionManager.isAccelerometerAvailable {
+//            self.motionManager.deviceMotionUpdateInterval = 1.0 / 1200.0
+//            self.motionManager.startDeviceMotionUpdates(to: imuOperationQueue, withHandler: motionHandler)
+//        }
+//    }
+//    
+//    private func stopAccelerometer() {
+//        self.motionManager.stopDeviceMotionUpdates()
+//    }
+    
+    private func startRawIMU() {
         if self.motionManager.isAccelerometerAvailable {
-            self.motionManager.deviceMotionUpdateInterval = 1.0 / 1200.0
-            self.motionManager.startDeviceMotionUpdates(to: imuOperationQueue, withHandler: motionHandler)
+            self.motionManager.accelerometerUpdateInterval = 1.0 / 1200.0 // Set update rate
+            self.motionManager.startAccelerometerUpdates(to: imuOperationQueue) { (data, error) in
+                guard let data = data else {
+                    if let error = error {
+                        print("Error retrieving accelerometer data: \(error.localizedDescription)")
+                    }
+                    return
+                }
+                self.datasetEncoder?.addRawAccelerometer(data: data)
+            }
+        } else {
+            print("Accelerometer not available on this device.")
+        }
+
+        if self.motionManager.isGyroAvailable {
+            self.motionManager.gyroUpdateInterval = 1.0 / 1200.0 // Set update rate
+            self.motionManager.startGyroUpdates(to: imuOperationQueue) { (data, error) in
+                guard let data = data else {
+                    if let error = error {
+                        print("Error retrieving gyroscope data: \(error.localizedDescription)")
+                    }
+                    return
+                }
+                self.datasetEncoder?.addRawGyroscope(data: data)
+            }
+        } else {
+            print("Gyroscope not available on this device.")
         }
     }
+
     
-    private func stopAccelerometer() {
-        self.motionManager.stopDeviceMotionUpdates()
-    }
-    
-    private func motionHandler(motion: CMDeviceMotion?, error: Error?) -> Void {
-        if motion != nil && datasetEncoder != nil {
-            datasetEncoder!.addIMU(motion: motion!)
+    private func stopRawIMU() {
+        if self.motionManager.isAccelerometerActive {
+            self.motionManager.stopAccelerometerUpdates()
+            print("Stopped accelerometer updates.")
+        }
+        if self.motionManager.isGyroActive {
+            self.motionManager.stopGyroUpdates()
+            print("Stopped gyroscope updates.")
         }
     }
+
+    
+//    private func motionHandler(motion: CMDeviceMotion?, error: Error?) -> Void {
+//        if motion != nil && datasetEncoder != nil {
+//            datasetEncoder!.addIMU(motion: motion!)
+//        }
+//    }
 
     private func stopRecording() {
         guard let started = self.startedRecording else {
@@ -221,7 +267,11 @@ class RecordSessionViewController : UIViewController, ARSessionDelegate {
         startedRecording = nil
         updateLabelTimer?.invalidate()
         updateLabelTimer = nil
-        stopAccelerometer()
+//      stopAccelerometer()
+        
+        // Stop IMU updates
+        stopRawIMU()
+        
         datasetEncoder?.wrapUp()
         if let encoder = datasetEncoder {
             switch encoder.status {
