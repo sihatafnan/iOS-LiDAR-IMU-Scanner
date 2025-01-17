@@ -69,6 +69,7 @@ class RecordSessionViewController : UIViewController, ARSessionDelegate {
     var audioPlayer: AVAudioPlayer?
     var attack: Bool = true
     var loadSignals: Bool = false
+    private var recordTimer: Timer?
     
 
     
@@ -130,6 +131,9 @@ class RecordSessionViewController : UIViewController, ARSessionDelegate {
         fpsButton.layer.cornerRadius = 12.0
         
         imuOperationQueue.qualityOfService = .userInitiated
+        
+        startRecordButtonTimer(after: 2.0) // Automatically start recording after 2 seconds
+
     }
 
     
@@ -286,7 +290,22 @@ class RecordSessionViewController : UIViewController, ARSessionDelegate {
             print("No dataset encoder. Something is wrong.")
         }
         self.dismissFunction?()
+        
+        // Automatically navigate to the recording screen and start recording again
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1) { // 1-second delay after stopping
+            self.dismissFunction?() // Navigate back to SessionList
+            DispatchQueue.main.asyncAfter(deadline: .now() + 2) { // 2 seconds after navigation
+                self.startRecordButtonTimer(after: 0.0) // Start recording again
+            }
+        }
     }
+    
+    func startRecordButtonTimer(after delay: TimeInterval) {
+        Timer.scheduledTimer(withTimeInterval: delay, repeats: false) { [weak self] _ in
+            self?.recordButton.buttonPressed()
+        }
+    }
+
 
     private func saveRecording(_ started: Date, _ encoder: DatasetEncoder) {
         let sessionCount = countSessions()
@@ -302,6 +321,8 @@ class RecordSessionViewController : UIViewController, ARSessionDelegate {
         recording.setValue(datasetEncoder!.depthFilePath.relativeString, forKey: "depthFilePath")
         do {
             try self.dataContext.save()
+            NotificationCenter.default.post(name: NSNotification.Name("sessionsChanged"), object: nil) // Notify the app about the new recording
+
         } catch let error as NSError {
             print("Could not save recording. \(error), \(error.userInfo)")
         }
