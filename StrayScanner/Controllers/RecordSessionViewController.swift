@@ -1,10 +1,4 @@
-//
-//  RecordSessionViewController.swift
-//  Stray Scanner
-//
-//  Created by Kenneth Blomqvist on 11/28/20.
-//  Copyright © 2020 Stray Robots. All rights reserved.
-//
+
 
 import Foundation
 import UIKit
@@ -34,15 +28,22 @@ class RecordingState {
     static let shared = RecordingState()
     private init() {}
 
-    var frequencyList: [Int] = Array(stride(from: 30000, through: 1000, by: -1000))
+    var frequencyList: [Int] = Array(stride(from: 1000, through: 5001, by: 500))
     
      var currentPhase: Phase = .pre
      var currentFrequencyIndex: Int = 0
+    var attemptNumber: Int = 1 // Start with attempt 1
 
      enum Phase {
         case pre
         case during
         case post
+    }
+    
+    func resetCycle() {
+        currentFrequencyIndex = 0
+        currentPhase = .pre
+        attemptNumber += 1 // Move to the next attempt
     }
 }
 
@@ -68,7 +69,7 @@ class RecordSessionViewController : UIViewController, ARSessionDelegate {
     
     var audioPlayer: AVAudioPlayer?
     var attack: Bool = true
-    var loadSignals: Bool = false
+    var loadSignals: Bool = true
     private var recordTimer: Timer?
     
 
@@ -98,11 +99,21 @@ class RecordSessionViewController : UIViewController, ARSessionDelegate {
             guard recording else { return } // Ignore if button is clicked to stop
             
             let state = RecordingState.shared
+            
+            if state.attemptNumber > 5 {
+                return
+            }
 
             // Ensure we still have frequencies to process
-            guard state.currentFrequencyIndex < state.frequencyList.count else {
-                print("All frequencies have been processed.")
-                return
+//            guard state.currentFrequencyIndex < state.frequencyList.count else {
+//                state.resetCycle()
+//                print("All frequencies have been processed.")
+//                return
+//            }
+            
+            if state.currentFrequencyIndex >= state.frequencyList.count {
+                state.resetCycle()
+                print("All frequencies have been processed. starting attempt \(state.attemptNumber)")
             }
 
             let currentFrequency = state.frequencyList[state.currentFrequencyIndex]
@@ -153,16 +164,22 @@ class RecordSessionViewController : UIViewController, ARSessionDelegate {
             self.updateTime()
         }
         datasetEncoder = DatasetEncoder(arConfiguration: arConfiguration!, fpsDivider: FpsDividers[chosenFpsSetting], dirName: directoryName)
-//        startAccelerometer()
         startRawIMU()
 
         // Stop recording after 3 seconds
-        Timer.scheduledTimer(withTimeInterval: 3.0, repeats: false) { _ in
-            self.stopRecording()
+        let state = RecordingState.shared
+        if state.currentPhase == .pre || state.currentPhase == .post {
+            Timer.scheduledTimer(withTimeInterval: 6.0, repeats: false) { _ in
+                self.stopRecording()
+            }
         }
+        else {
+            Timer.scheduledTimer(withTimeInterval: 3.0, repeats: false) { _ in
+                self.stopRecording()
+            }
+        }
+        
     }
-
-
 
     override func viewDidDisappear(_ animated: Bool) {
         session.pause();
@@ -194,16 +211,6 @@ class RecordSessionViewController : UIViewController, ARSessionDelegate {
         }
     }
     
-//    private func startAccelerometer() {
-//        if self.motionManager.isAccelerometerAvailable {
-//            self.motionManager.deviceMotionUpdateInterval = 1.0 / 1200.0
-//            self.motionManager.startDeviceMotionUpdates(to: imuOperationQueue, withHandler: motionHandler)
-//        }
-//    }
-//    
-//    private func stopAccelerometer() {
-//        self.motionManager.stopDeviceMotionUpdates()
-//    }
     
     private func startRawIMU() {
         if self.motionManager.isAccelerometerAvailable {
@@ -406,12 +413,12 @@ class RecordSessionViewController : UIViewController, ARSessionDelegate {
 
         // List of files to copy
         let fileNames = [
-            "1000Hz.wav", "2000Hz.wav", "3000Hz.wav", "4000Hz.wav", "5000Hz.wav",
-            "6000Hz.wav", "7000Hz.wav", "8000Hz.wav", "9000Hz.wav", "10000Hz.wav",
-            "11000Hz.wav", "12000Hz.wav", "13000Hz.wav", "14000Hz.wav", "15000Hz.wav",
-            "16000Hz.wav", "17000Hz.wav", "18000Hz.wav", "19000Hz.wav", "20000Hz.wav",
-            "21000Hz.wav", "22000Hz.wav", "23000Hz.wav", "24000Hz.wav", "25000Hz.wav",
-            "26000Hz.wav", "27000Hz.wav", "28000Hz.wav", "29000Hz.wav", "30000Hz.wav"
+            "1500Hz.wav", "2500Hz.wav", "3500Hz.wav", "4500Hz.wav"
+//            "6000Hz.wav", "7000Hz.wav", "8000Hz.wav", "9000Hz.wav", "10000Hz.wav",
+//            "11000Hz.wav", "12000Hz.wav", "13000Hz.wav", "14000Hz.wav", "15000Hz.wav",
+//            "16000Hz.wav", "17000Hz.wav", "18000Hz.wav", "19000Hz.wav", "20000Hz.wav",
+//            "21000Hz.wav", "22000Hz.wav", "23000Hz.wav", "24000Hz.wav", "25000Hz.wav",
+//            "26000Hz.wav", "27000Hz.wav", "28000Hz.wav", "29000Hz.wav", "30000Hz.wav"
         ]
 
 
@@ -500,3 +507,4 @@ class RecordSessionViewController : UIViewController, ARSessionDelegate {
         return 0
     }
 }
+

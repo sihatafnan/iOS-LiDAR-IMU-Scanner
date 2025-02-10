@@ -1,10 +1,4 @@
-//
-//  DatasetEncoder.swift
-//  StrayScanner
-//
-//  Created by Kenneth Blomqvist on 1/2/21.
-//  Copyright © 2021 Stray Robots. All rights reserved.
-//
+
 
 import Foundation
 import ARKit
@@ -91,7 +85,7 @@ class DatasetEncoder {
     }
     
 //    func addIMU(motion: CMDeviceMotion) -> Void {
-//        
+//
 //        let rotationRate: simd_double3 = simd_double3(motion.rotationRate.x, motion.rotationRate.y, motion.rotationRate.z)
 //        let acceleration: simd_double3 = simd_double3(motion.userAcceleration.x, motion.userAcceleration.y, motion.userAcceleration.z)
 //        let gravity: simd_double3 = simd_double3(motion.gravity.x, motion.gravity.y, motion.gravity.z)
@@ -179,21 +173,33 @@ class DatasetEncoder {
         }
     }
 
-    static private func createDirectory(dir: String  = ".") -> URL {
-//        let directoryId = hashUUID(id: id)
-        let url = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
-        var directory = URL(fileURLWithPath: dir, relativeTo: url)
-        if FileManager.default.fileExists(atPath: directory.absoluteString) {
-            // Just in case the first 5 characters clash, try again.
-            directory = DatasetEncoder.createDirectory(dir: dir)
+    static private func createDirectory(dir: String = ".") -> URL {
+        let state = RecordingState.shared
+        let attemptDirName = "attempt_\(state.attemptNumber)" // Add attempt folder
+        let baseDir = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
+        let attemptDir = baseDir.appendingPathComponent(attemptDirName)
+
+        // Ensure attempt directory exists
+        if !FileManager.default.fileExists(atPath: attemptDir.path) {
+            do {
+                try FileManager.default.createDirectory(at: attemptDir, withIntermediateDirectories: true, attributes: nil)
+            } catch let error as NSError {
+                print("Error creating attempt directory. \(error), \(error.userInfo)")
+            }
         }
-        do {
-            try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true, attributes: nil)
-        } catch let error as NSError {
-            print("Error creating directory. \(error), \(error.userInfo)")
+
+        // Append specific directory (e.g., pre_1000, 1000, post_1000)
+        let specificDir = attemptDir.appendingPathComponent(dir)
+        if !FileManager.default.fileExists(atPath: specificDir.path) {
+            do {
+                try FileManager.default.createDirectory(at: specificDir, withIntermediateDirectories: true, attributes: nil)
+            } catch let error as NSError {
+                print("Error creating specific directory. \(error), \(error.userInfo)")
+            }
         }
-        return directory
+        return specificDir
     }
+
 
     static private func hashUUID(id: UUID) -> String {
         var hasher: SHA256 = SHA256()
@@ -207,3 +213,4 @@ class DatasetEncoder {
         return string
     }
 }
+
