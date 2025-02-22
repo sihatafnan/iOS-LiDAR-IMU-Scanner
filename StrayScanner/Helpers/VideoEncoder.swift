@@ -31,13 +31,19 @@ class VideoEncoder {
     private var previousFrame: Int = -1
     public var filePath: URL
     public var status: EncodingStatus = EncodingStatus.allGood
+    
+    private var saveRGBFramesOnly: Bool  // ✅ New flag
 
-    init(file: URL, width: CGFloat, height: CGFloat) {
+    init(file: URL, width: CGFloat, height: CGFloat, saveRGBFramesOnly: Bool = true) {
         self.systemBootedAt = ProcessInfo.processInfo.systemUptime
         self.filePath = file
         self.width = width
         self.height = height
-        initializeFile()
+        self.saveRGBFramesOnly = saveRGBFramesOnly
+
+        if !saveRGBFramesOnly {
+            initializeFile()
+        }
     }
 
     func finishEncoding() {
@@ -45,12 +51,16 @@ class VideoEncoder {
     }
 
     func add(frame: VideoEncoderInput, currentFrame: Int) {
-        previousFrame = currentFrame
-        while !videoWriterInput!.isReadyForMoreMediaData {
-            print("Sleeping.")
-            Thread.sleep(until: Date() + TimeInterval(0.01))
+        if saveRGBFramesOnly {
+            saveFrameAsPNG(frame: frame, frameNumber: currentFrame)  // ✅ Save frame as PNG instead
+        } else {
+            previousFrame = currentFrame
+            while !videoWriterInput!.isReadyForMoreMediaData {
+                print("Sleeping.")
+                Thread.sleep(until: Date() + TimeInterval(0.01))
+            }
+            encode(frame: frame, frameNumber: currentFrame)
         }
-        encode(frame: frame, frameNumber: currentFrame)
     }
 
     private func initializeFile() {
@@ -106,4 +116,45 @@ class VideoEncoder {
     private func createVideoAdapter(_ input: AVAssetWriterInput) -> AVAssetWriterInputPixelBufferAdaptor {
         return AVAssetWriterInputPixelBufferAdaptor(assetWriterInput: input, sourcePixelBufferAttributes: nil)
     }
+    
+    private func saveFrameAsPNG(frame: VideoEncoderInput, frameNumber: Int) {
+        let rgbFramesDir = filePath // ✅ Uses `rgb_frames/` as file path
+
+        // Create directory if it doesn't exist
+        if !FileManager.default.fileExists(atPath: rgbFramesDir.path) {
+            do {
+                try FileManager.default.createDirectory(at: rgbFramesDir, withIntermediateDirectories: true, attributes: nil)
+            } catch {
+                print("Failed to create RGB frames directory: \(error.localizedDescription)")
+                return
+            }
+        }
+
+        // Convert pixel buffer to UIImage
+        let uiImage = convertPixelBufferToUIImage(pixelBuffer: frame.buffer)
+        let framePath = rgbFramesDir.appendingPathComponent(String(format: "%06d", frameNumber)).appendingPathExtension("png")
+
+        // Save image as PNG
+        do {
+            if let pngData = uiImage.pngData() {
+                try pngData.write(to: framePath)
+            }
+        } catch {
+            print("Failed to save RGB frame \(frameNumber) as PNG: \(error.localizedDescription)")
+        }
+    }
+
+    
+    private func convertPixelBufferToUIImage(pixelBuffer: CVPixelBuffer) -> UIImage {
+        let ciImage = CIImage(cvPixelBuffer: pixelBuffer)
+        let context = CIContext(options: nil)
+        
+        if let cgImage = context.createCGImage(ciImage, from: ciImage.extent) {
+            return UIImage(cgImage: cgImage)
+        } else {
+            fatalError("Failed to convert PixelBuffer to UIImage")
+        }
+    }
+
+
 }

@@ -44,12 +44,13 @@ class DepthEncoder {
         assert(CVPixelBufferGetPixelFormatType(frame) == kCVPixelFormatType_DepthFloat32)
         let height = CVPixelBufferGetHeight(frame)
         let width = CVPixelBufferGetWidth(frame)
+        
         CVPixelBufferLockBaseAddress(frame, CVPixelBufferLockFlags.readOnly)
         let inBase = CVPixelBufferGetBaseAddress(frame)
         let inPixelData = inBase!.assumingMemoryBound(to: Float32.self)
-        
         let out = PngEncoder.init(depth: inPixelData, width: Int32(width), height: Int32(height))!
         CVPixelBufferUnlockBaseAddress(frame, CVPixelBufferLockFlags(rawValue: 0))
+        
         return out
     }
 }

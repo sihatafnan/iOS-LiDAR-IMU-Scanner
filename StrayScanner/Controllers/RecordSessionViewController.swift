@@ -28,7 +28,7 @@ class RecordingState {
     static let shared = RecordingState()
     private init() {}
 
-    var frequencyList: [Int] = Array(stride(from: 1000, through: 5001, by: 500))
+    var frequencyList: [Int] = Array(stride(from: 1000, through: 30001, by: 1000))
     
      var currentPhase: Phase = .pre
      var currentFrequencyIndex: Int = 0
@@ -69,12 +69,14 @@ class RecordSessionViewController : UIViewController, ARSessionDelegate {
     
     var audioPlayer: AVAudioPlayer?
     var attack: Bool = true
-    var loadSignals: Bool = true
+    var loadSignals: Bool = false
     private var recordTimer: Timer?
     
+    
+    var lastTimestamp: TimeInterval = 0
+    var frameCount: Int = 0
+    
 
-    
-    
     func setDismissFunction(_ fn: Optional<() -> Void>) {
         self.dismissFunction = fn
     }
@@ -100,9 +102,9 @@ class RecordSessionViewController : UIViewController, ARSessionDelegate {
             
             let state = RecordingState.shared
             
-            if state.attemptNumber > 5 {
-                return
-            }
+//            if state.attemptNumber > 5 {
+//                return
+//            }
 
             // Ensure we still have frequencies to process
 //            guard state.currentFrequencyIndex < state.frequencyList.count else {
@@ -111,31 +113,31 @@ class RecordSessionViewController : UIViewController, ARSessionDelegate {
 //                return
 //            }
             
-            if state.currentFrequencyIndex >= state.frequencyList.count {
-                state.resetCycle()
-                print("All frequencies have been processed. starting attempt \(state.attemptNumber)")
-            }
+//            if state.currentFrequencyIndex >= state.frequencyList.count {
+//                state.resetCycle()
+//                print("All frequencies have been processed. starting attempt \(state.attemptNumber)")
+//            }
 
             let currentFrequency = state.frequencyList[state.currentFrequencyIndex]
-
+            self.startRecording(freq: currentFrequency, folderName: "\(currentFrequency)")
             // Handle the current phase
-            switch state.currentPhase {
-            case .pre:
-                print("Recording silence (pre) for \(currentFrequency)Hz")
-                self.startRecording(freq: 0, folderName: "pre_\(currentFrequency)")
-                state.currentPhase = .during // Move to the next phase
-
-            case .during:
-                print("Recording with \(currentFrequency)Hz audio")
-                self.startRecording(freq: currentFrequency, folderName: "\(currentFrequency)")
-                state.currentPhase = .post // Move to the next phase
-
-            case .post:
-                print("Recording silence (post) for \(currentFrequency)Hz")
-                self.startRecording(freq: 0, folderName: "post_\(currentFrequency)")
-                state.currentPhase = .pre // Reset to pre phase
-                state.currentFrequencyIndex += 1 // Move to the next frequency
-            }
+//            switch state.currentPhase {
+//            case .pre:
+//                print("Recording silence (pre) for \(currentFrequency)Hz")
+//                self.startRecording(freq: 0, folderName: "pre_\(currentFrequency)")
+//                state.currentPhase = .during // Move to the next phase
+//
+//            case .during:
+//                print("Recording with \(currentFrequency)Hz audio")
+//                self.startRecording(freq: currentFrequency, folderName: "\(currentFrequency)")
+//                state.currentPhase = .post // Move to the next phase
+//
+//            case .post:
+//                print("Recording silence (post) for \(currentFrequency)Hz")
+//                self.startRecording(freq: 0, folderName: "post_\(currentFrequency)")
+//                state.currentPhase = .pre // Reset to pre phase
+//                state.currentFrequencyIndex += 1 // Move to the next frequency
+//            }
         }
 
         fpsButton.layer.masksToBounds = true
@@ -149,14 +151,16 @@ class RecordSessionViewController : UIViewController, ARSessionDelegate {
 
     
     private func startRecording(freq: Int, folderName: String) {
-        print("Starting recording in folder: \(folderName) with freq: \(freq)")
+        if freq != 0 && attack == true {
+            let attack_vector = "\(freq)Hz.wav"
+            playSound(fileName: attack_vector, loop: false)
+        }
+        
+        print("Starting recording with freq: \(freq)")
         
         let directoryName = folderName
 
-        if freq != 0 && attack == true {
-            let attack_vector = "\(freq)Hz.wav"
-            playSound(fileName: attack_vector, loop: true)
-        }
+        
 
         self.startedRecording = Date()
         updateTime()
@@ -165,19 +169,23 @@ class RecordSessionViewController : UIViewController, ARSessionDelegate {
         }
         datasetEncoder = DatasetEncoder(arConfiguration: arConfiguration!, fpsDivider: FpsDividers[chosenFpsSetting], dirName: directoryName)
         startRawIMU()
+        
+        Timer.scheduledTimer(withTimeInterval: 15.0, repeats: false) { _ in
+                        self.stopRecording()
+                    }
 
-        // Stop recording after 3 seconds
-        let state = RecordingState.shared
-        if state.currentPhase == .pre || state.currentPhase == .post {
-            Timer.scheduledTimer(withTimeInterval: 6.0, repeats: false) { _ in
-                self.stopRecording()
-            }
-        }
-        else {
-            Timer.scheduledTimer(withTimeInterval: 3.0, repeats: false) { _ in
-                self.stopRecording()
-            }
-        }
+        // Stop recording after 15 seconds
+//        let state = RecordingState.shared
+//        if state.currentPhase == .pre || state.currentPhase == .post {
+//            Timer.scheduledTimer(withTimeInterval: 6.0, repeats: false) { _ in
+//                self.stopRecording()
+//            }
+//        }
+//        else {
+//            Timer.scheduledTimer(withTimeInterval: 3.0, repeats: false) { _ in
+//                self.stopRecording()
+//            }
+//        }
         
     }
 
@@ -256,12 +264,6 @@ class RecordSessionViewController : UIViewController, ARSessionDelegate {
         }
     }
 
-    
-//    private func motionHandler(motion: CMDeviceMotion?, error: Error?) -> Void {
-//        if motion != nil && datasetEncoder != nil {
-//            datasetEncoder!.addIMU(motion: motion!)
-//        }
-//    }
 
     private func stopRecording() {
         guard let started = self.startedRecording else {
@@ -296,7 +298,22 @@ class RecordSessionViewController : UIViewController, ARSessionDelegate {
         } else {
             print("No dataset encoder. Something is wrong.")
         }
-        self.dismissFunction?()
+        let state = RecordingState.shared
+
+        // Move to the next attempt or frequency
+        if state.attemptNumber < 3 {
+            state.attemptNumber += 1 // Move to next attempt for the same frequency
+        } else {
+            state.attemptNumber = 1 // Reset attempts
+            state.currentFrequencyIndex += 1 // Move to the next frequency
+        }
+
+        // Stop if all frequencies are completed
+        if state.currentFrequencyIndex >= state.frequencyList.count {
+            print("All attempts completed for all frequencies. Stopping recording.")
+            return
+        }
+
         
         // Automatically navigate to the recording screen and start recording again
         DispatchQueue.main.asyncAfter(deadline: .now() + 1) { // 1-second delay after stopping
@@ -374,6 +391,16 @@ class RecordSessionViewController : UIViewController, ARSessionDelegate {
     }
 
     func session(_ session: ARSession, didUpdate frame: ARFrame) {
+//        let currentTime = frame.timestamp
+//            
+//        if lastTimestamp != 0 {
+//            let fps = 1.0 / (currentTime - lastTimestamp)
+//            print("Frame \(frameCount): FPS = \(fps)")
+//        }
+//        
+//        lastTimestamp = currentTime
+//        frameCount += 1
+        
         self.renderer!.render(frame: frame)
         if startedRecording != nil {
             if let encoder = datasetEncoder {
@@ -413,12 +440,14 @@ class RecordSessionViewController : UIViewController, ARSessionDelegate {
 
         // List of files to copy
         let fileNames = [
-            "1500Hz.wav", "2500Hz.wav", "3500Hz.wav", "4500Hz.wav"
-//            "6000Hz.wav", "7000Hz.wav", "8000Hz.wav", "9000Hz.wav", "10000Hz.wav",
-//            "11000Hz.wav", "12000Hz.wav", "13000Hz.wav", "14000Hz.wav", "15000Hz.wav",
-//            "16000Hz.wav", "17000Hz.wav", "18000Hz.wav", "19000Hz.wav", "20000Hz.wav",
-//            "21000Hz.wav", "22000Hz.wav", "23000Hz.wav", "24000Hz.wav", "25000Hz.wav",
-//            "26000Hz.wav", "27000Hz.wav", "28000Hz.wav", "29000Hz.wav", "30000Hz.wav"
+            //"1500Hz.wav", "2500Hz.wav", "3500Hz.wav", "4500Hz.wav",
+            "1000Hz.wav","2000Hz.wav",
+            "3000Hz.wav", "4000Hz.wav", "5000Hz.wav",
+            "6000Hz.wav", "7000Hz.wav", "8000Hz.wav", "9000Hz.wav", "10000Hz.wav",
+            "11000Hz.wav", "12000Hz.wav", "13000Hz.wav", "14000Hz.wav", "15000Hz.wav",
+            "16000Hz.wav", "17000Hz.wav", "18000Hz.wav", "19000Hz.wav", "20000Hz.wav",
+            "21000Hz.wav", "22000Hz.wav", "23000Hz.wav", "24000Hz.wav", "25000Hz.wav",
+            "26000Hz.wav", "27000Hz.wav", "28000Hz.wav", "29000Hz.wav", "30000Hz.wav"
         ]
 
 

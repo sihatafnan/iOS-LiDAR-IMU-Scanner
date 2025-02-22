@@ -12,6 +12,7 @@ class DatasetEncoder {
         case directoryCreationError
     }
     private let rgbEncoder: VideoEncoder
+    private let saveRGBFramesOnly: Bool  // ✅ New flag to control RGB frame saving
     private let depthEncoder: DepthEncoder
     private let confidenceEncoder: ConfidenceEncoder
     private let datasetDirectory: URL
@@ -23,7 +24,7 @@ class DatasetEncoder {
     private var savedFrames: Int = 0
     private let frameInterval: Int // Only save every frameInterval-th frame.
     public let id: UUID
-    public let rgbFilePath: URL // Relative to app document directory.
+    public var rgbFilePath: URL // Relative to app document directory.
     public let depthFilePath: URL // Relative to app document directory.
     public let cameraMatrixPath: URL
     public let odometryPath: URL
@@ -44,8 +45,17 @@ class DatasetEncoder {
         let theId: UUID = UUID()
         datasetDirectory = DatasetEncoder.createDirectory(dir: dirName)
         self.id = theId
-        self.rgbFilePath = datasetDirectory.appendingPathComponent("rgb.mp4")
-        self.rgbEncoder = VideoEncoder(file: self.rgbFilePath, width: width, height: height)
+        
+        self.saveRGBFramesOnly = true
+        // ✅ Set file path dynamically
+        self.rgbFilePath = datasetDirectory.appendingPathComponent(".")
+        if saveRGBFramesOnly {
+            rgbFilePath = datasetDirectory.appendingPathComponent("rgb_frames")  // Folder for PNG frames
+        } else {
+            rgbFilePath = datasetDirectory.appendingPathComponent("rgb.mp4")  // Video file
+        }
+        self.rgbEncoder = VideoEncoder(file: rgbFilePath, width: width, height: height, saveRGBFramesOnly: saveRGBFramesOnly)
+
         self.depthFilePath = datasetDirectory.appendingPathComponent("depth", isDirectory: true)
         self.depthEncoder = DepthEncoder(outDirectory: self.depthFilePath)
         let confidenceFilePath = datasetDirectory.appendingPathComponent("confidence", isDirectory: true)
